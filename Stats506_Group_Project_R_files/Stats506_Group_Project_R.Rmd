@@ -1,0 +1,117 @@
+---
+title: "STATS506_Groupwork"
+author: "Fang Zhou"
+date: "December 6, 2018"
+output:
+  html_document: default
+---
+
+## R
+
+R packages required:
+
+```{r}
+### use package 'cluster' to do hierarchical clustering
+library('cluster')
+### use package 'factoextra'and 'dplyr' to do elbow method
+library('dplyr')
+library('factoextra')
+```
+
+### Data Preparation
+
+Firstly, we load data from R as df.
+
+```{r load data}
+df=USArrests
+```
+
+Then, view the first six lines of the dataframe by head().
+
+```{r view head of data,eval=TRUE}
+head(df)
+```
+
+Make a summary of the data to see the statistics properties of the data set.
+
+```{r summarize data,eval=TRUE}
+summary(df)
+```
+
+As we don't want the clustering algorithm to depend to an arbitrary variable unit, we start by standardizing the data using scale() and then view the new data.
+
+```{r standardize data,eval=TRUE}
+df <- scale(df)
+head(df)
+```
+
+
+### Agglomerative Hierarchical Clustering
+
+Great! Now we can come to the clustering!
+In R, we use package 'cluster' to do agglomerative hierarchical clustering. We use `dist` to calculate the Euclidean Distance between each obeservation and divide them to different clusters according to the average distance. Finally, we plot the dendrograms to illustrate the outcome of hierarchical clustering.
+
+```{r cluster and draw dendrogram plot,eval=TRUE}
+### compute the dissimilarity values
+
+d <- dist(df, method = "euclidean")
+
+### Hierarchical clustering using Average Linkage
+
+hc1 <- hclust(d, method = "average" )
+
+# Plot the obtained dendrogram
+plot(hc1, cex = 0.6, hang = -1)
+
+```
+
+### Determining the Number of Clusters
+
+#### Elbow Method
+
+The height of the cut to the dendrogram controls the number of clusters obtained. It plays the same role as the k in k-means clustering. Thus, we need to decide the value of k first.
+
+We use Elbow Method to determine the number of clusters obtained.
+
+Firstly, write a finction f to compute the WSS of each k.
+
+```{r determine number of clusters,eval=TRUE}
+###  write a function to compute WSS of each k
+f=function(k){
+sub_grp <- cutree(hc1, k)
+df=as.data.frame(df)
+df2=df %>%
+  mutate(cluster = sub_grp)%>%
+  group_by(cluster)%>%
+  summarize(M=mean(Murder),A=mean(Assault),U=mean(UrbanPop),R=mean(Rape))
+df1=df %>%
+  mutate(cluster = sub_grp)
+df3=left_join(df1,df2,by="cluster")
+D=(df3$Murder-df3$M)^2+(df3$Assault-df3$A)^2+(df3$UrbanPop-df3$U)^2+(df3$Rape-df3$R)^2
+df4=cbind(df3,D)
+WSS=sum(df4$D)
+WSS
+}
+
+```
+
+Then, plot the WSS against k to find the inflection point.
+
+```{r Elbow Method plot, eval=TRUE}
+### plot WSS against each k from 1 to 10
+WSS=c()
+for (i in 1:10){WSS[i]=f(i)}
+K=c(1:10)
+SSW_K=as.data.frame(cbind(WSS,K))
+p=ggplot(SSW_K, aes(x=K, y=WSS)) + geom_line() + geom_point()
+p + scale_x_continuous(breaks=K, labels = K) + labs(title = "Elbow Method")
+```
+
+From the plot above we can see that if k < 5, the change of WSS is very fast; While k > 5, the change of WSS becomes slow. Thus, we can determine the number of clusters is 5.
+
+Now we divide the states into 5 clusters based on the outcomes of agglomerative hierarchical clustering.
+
+```{r divide 5 clusters, eval=TRUE}
+plot(hc1, cex = 0.6)
+rect.hclust(hc1, k = 5, border = 2:5)
+```
